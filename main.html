@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALBATROSS — Coordinate Zero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{bg:'#0A0F1E','bg-alt':'#0D0D0D',paper:'#E8E4D9','paper-dark':'#C8C0B0',amber:'#C8860A','amber-glow':'#E5A820',cyan:'#00B4B4','cyan-dim':'#006666',redacted:'#8B2020','term-green':'#33FF66'},fontFamily:{typewriter:['"Special Elite"','cursive'],mono:['"IBM Plex Mono"','monospace'],data:['"JetBrains Mono"','monospace']}}}}
+</script>
+<style>
+:root{--bg:#0A0F1E;--paper:#E8E4D9;--amber:#C8860A;--cyan:#00B4B4;--redacted:#8B2020}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--paper);font-family:'IBM Plex Mono',monospace;overflow-x:hidden}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0a0e18}
+::-webkit-scrollbar-thumb{background:#2a2a3e;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#3a3a5e}
+
+/* Scan lines */
+.scanlines::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9999}
+.static-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.04);pointer-events:none;z-index:9998;animation:staticFlicker 10s infinite}
+@keyframes staticFlicker{0%,94%{opacity:0}95%{opacity:1}96%{opacity:0}98%{opacity:.5}100%{opacity:0}}
+
+/* Typewriter cursor */
+.tw-cursor::after{content:'\2588';color:var(--amber);animation:blink .7s infinite}
+@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+
+/* Paper panel */
+.paper-panel{background:radial-gradient(ellipse at 20% 50%,rgba(139,119,80,.06) 0%,transparent 50%),radial-gradient(ellipse at 75% 25%,rgba(139,119,80,.04) 0%,transparent 40%),radial-gradient(ellipse at 50% 85%,rgba(139,119,80,.05) 0%,transparent 45%),linear-gradient(to bottom,#E8E4D9,#DDD5C5);position:relative;color:#2a2418}
+.paper-panel::before{content:'';position:absolute;inset:0;opacity:.12;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E")}
+
+/* Redacted bar */
+.redacted{background:#1a1a1a;padding:2px 10px;cursor:pointer;transition:all .4s ease;display:inline;position:relative;border-radius:2px}
+.redacted:hover{background:transparent}
+.redacted .hidden-text{opacity:0;transition:opacity .3s ease .15s;color:var(--amber)}
+.redacted:hover .hidden-text{opacity:1}
+
+/* Stamp */
+.stamp{display:inline-block;border:3px solid;padding:3px 14px;transform:rotate(-7deg);font-family:'Special Elite',cursive;font-size:.85rem;letter-spacing:3px;opacity:.75;white-space:nowrap}
+.stamp-classified{border-color:var(--redacted);color:var(--redacted)}
+.stamp-declassified{border-color:#2D6A2D;color:#2D6A2D}
+.stamp-verified{border-color:var(--amber);color:var(--amber)}
+.stamp-error{border-color:#cc0000;color:#cc0000}
+@keyframes stampAppear{0%{transform:rotate(-7deg) scale(2.2);opacity:0}50%{transform:rotate(-7deg) scale(.92);opacity:.85}100%{transform:rotate(-7deg) scale(1);opacity:.75}}
+.stamp-animate{animation:stampAppear .35s ease-out forwards}
+
+/* Folder */
+.folder-wrap{perspective:1200px}
+.folder-cover{transform-origin:left center;transition:transform 1.4s cubic-bezier(.25,.46,.45,.94);backface-visibility:hidden}
+.folder-open .folder-cover{transform:rotateY(-165deg)}
+
+/* Chapter tab */
+.ch-tab{position:relative;background:#12162a;padding:14px 20px 14px 16px;border:1px solid #1e2240;border-bottom:none;cursor:pointer;transition:all .3s ease;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%);user-select:none}
+.ch-tab:hover:not(.locked){background:#161a34;border-color:#2e3260}
+.ch-tab.active{background:var(--bg);border-color:var(--amber);color:var(--amber)}
+.ch-tab.locked{opacity:.35;cursor:not-allowed}
+
+/* Scroll reveal */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+/* Map tooltip */
+.map-tooltip{position:absolute;background:rgba(10,15,30,.92);border:1px solid var(--cyan);color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:.7rem;padding:6px 10px;border-radius:4px;pointer-events:none;white-space:nowrap;z-index:100;opacity:0;transition:opacity .2s}
+.map-tooltip.show{opacity:1}
+
+/* Code input */
+.code-input{background:#0d111e;border:1px solid #2a2e4a;color:var(--amber);font-family:'JetBrains Mono',monospace;font-size:1.5rem;letter-spacing:12px;text-align:center;width:180px;padding:10px 12px;outline:none;transition:border-color .3s}
+.code-input:focus{border-color:var(--amber)}
+.code-input.shake{animation:shake .4s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+
+/* Ambient glow blobs */
+.glow-blob{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0}
+
+/* Dossier spine line */
+.dossier-spine{position:absolute;top:0;right:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,#1e2240 20%,#1e2240 80%,transparent)}
+
+/* Section divider */
+.section-divider{height:1px;background:linear-gradient(to right,transparent,#2a2e4a 30%,#2a2e4a 70%,transparent);margin:48px 0}
+
+/* Reduced motion */
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  .tw-cursor::after{animation:none;content:''}
+  .static-overlay{display:none}
+  .folder-cover{transition:none}
+  .stamp-animate{animation:none;opacity:.75;transform:rotate(-7deg) scale(1)}
+}
+</style>
+</head>
+<body class="scanlines">
+
+<!-- Ambient glows -->
+<div class="glow-blob" style="width:400px;height:400px;background:rgba(200,134,10,.04);top:-100px;left:-100px"></div>
+<div class="glow-blob" style="width:350px;height:350px;background:rgba(0,180,180,.03);bottom:-80px;right:-80px"></div>
+<div class="static-overlay"></div>
+
+<!-- Dust canvas -->
+<canvas id="dust-canvas" style="position:fixed;inset:0;z-index:1;pointer-events:none"></canvas>
+
+<!-- ===== OPENING SCREEN ===== -->
+<div id="opening" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg">
+  <div id="opening-text" class="text-center px-6" style="min-height:220px">
+    <p class="tw-cursor text-amber font-typewriter text-sm md:text-base tracking-widest" style="min-height:1.5em"></p>
+  </div>
+  <button id="start-btn" onclick="beginSequence()" class="mt-12 px-8 py-3 border border-amber/50 text-amber font-typewriter text-sm tracking-widest hover:bg-amber/10 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-amber/40" aria-label="Begin dossier access sequence">
+    CLICK TO ACCESS DOSSIER
+  </button>
+  <div id="folder-container" class="folder-wrap mt-10" style="display:none">
+    <div id="folder" class="relative" style="width:320px;height:210px">
+      <div class="absolute inset-0 bg-paper-dark rounded shadow-2xl p-5 paper-panel">
+        <div class="stamp stamp-classified stamp-animate mb-2">CLASSIFIED</div>
+        <p class="text-xs opacity-50 font-typewriter leading-relaxed">RE: ANOMALY DETECTION PROTOCOL</p>
+        <p class="text-xs opacity-50 font-typewriter leading-relaxed mt-1">COORDINATE ZERO — SINGAPORE</p>
+        <p class="text-xs opacity-30 font-typewriter mt-3">4 ANOMALIES LOGGED</p>
+      </div>
+      <div id="folder-cover" class="folder-cover absolute inset-0 rounded shadow-xl flex items-center justify-center" style="background:linear-gradient(135deg,#5c4210,#8a6518);z-index:10">
+        <span class="font-typewriter text-amber-200/80 text-lg tracking-[.25em]">ALBATROSS</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MAIN DOSSIER ===== -->
+<div id="dossier" class="relative z-10 min-h-screen" style="display:none">
+  <!-- Top status bar -->
+  <header class="sticky top-0 z-40 border-b border-[#1e2240] bg-bg/90 backdrop-blur-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-amber font-typewriter text-xs tracking-widest">ALBATROSS</span>
+        <span class="text-[#3a3e5a]">|</span>
+        <span class="text-paper/40 text-xs tracking-wider">SPATIAL ANALYSIS UNIT</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="stamp stamp-classified text-[.6rem] py-0 px-2" style="transform:rotate(-4deg)">TOP SECRET</span>
+        <span class="text-term-green font-data text-[.65rem] hidden md:inline" id="coord-display">1.3521°N 103.8198°E</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto flex relative" style="min-height:calc(100vh - 52px)">
+    <!-- Sidebar -->
+    <nav class="w-64 flex-shrink-0 border-r border-[#1e2240] relative hidden md:block" aria-label="Chapter navigation">
+      <div class="dossier-spine"></div>
+      <div class="p-4 pt-6">
+        <p class="text-[.6rem] tracking-[.2em] text-paper/30 mb-5 uppercase">Dossier Contents</p>
+        <div class="flex flex-col gap-1" id="chapter-tabs">
+          <button class="ch-tab active text-left" data-ch="1" onclick="switchChapter(1)" aria-label="Chapter 1: The Shape of Deception">
+            <span class="text-[.6rem] text-paper/30 block">ANOMALY 01</span>
+            <span class="text-xs font-typewriter">The Shape of Deception</span>
+          </button>
+          <button class="ch-tab locked text-left" data-ch="2" onclick="switchChapter(2)" aria-label="Chapter 2: Locked">
+            <span class="text-[.6rem] text-paper/30 block">ANOMALY 02</span>
+            <span class="text-xs font-typewriter">Language of Locations</span>
+            <span class="text-[.55rem] text-redacted mt-1 block">LOCKED — CODE REQUIRED</span>
+          </button>
+          <button class="ch-tab locked text-left" data-ch="3" onclick="switchChapter(3)" aria-label="Chapter 3: Locked">
+            <span class="text-[.6rem] text-paper/30 block">ANOMALY 03</span>
+            <span class="text-xs font-typewriter">Measurements from Orbit</span>
+            <span class="text-[.55rem] text-redacted mt-1 block">LOCKED — CODE REQUIRED</span>
+          </button>
+          <button class="ch-tab locked text-left" data-ch="4" onclick="switchChapter(4)" aria-label="Chapter 4: Locked">
+            <span class="text-[.6rem] text-paper/30 block">ANOMALY 04</span>
+            <span class="text-xs font-typewriter">The Way Ahead</span>
+            <span class="text-[.55rem] text-redacted mt-1 block">LOCKED — CODE REQUIRED</span>
+          </button>
+        </div>
+        <!-- Progress -->
+        <div class="mt-8">
+          <p class="text-[.55rem] text-paper/20 tracking-wider mb-2">DOSSIER PROGRESS</p>
+          <div class="flex gap-1.5">
+            <div class="w-6 h-1 rounded bg-amber" id="prog-1"></div>
+            <div class="w-6 h-1 rounded bg-[#1e2240]" id="prog-2"></div>
+            <div class="w-6 h-1 rounded bg-[#1e2240]" id="prog-3"></div>
+            <div class="w-6 h-1 rounded bg-[#1e2240]" id="prog-4"></div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Mobile chapter selector -->
+    <div class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-bg/95 backdrop-blur border-t border-[#1e2240] flex" id="mobile-nav">
+      <button class="flex-1 py-3 text-center text-[.6rem] text-amber border-t-2 border-amber" data-ch="1" onclick="switchChapter(1)">01</button>
+      <button class="flex-1 py-3 text-center text-[.6rem] text-paper/30 border-t-2 border-transparent" data-ch="2" onclick="switchChapter(2)">02</button>
+      <button class="flex-1 py-3 text-center text-[.6rem] text-paper/30 border-t-2 border-transparent" data-ch="3" onclick="switchChapter(3)">03</button>
+      <button class="flex-1 py-3 text-center text-[.6rem] text-paper/30 border-t-2 border-transparent" data-ch="4" onclick="switchChapter(4)">04</button>
+    </div>
+
+    <!-- Content area -->
+    <main class="flex-1 overflow-y-auto pb-24 md:pb-8" id="content-scroll">
+
+      <!-- ===== CHAPTER 1 ===== -->
+      <article id="chapter-1" class="px-6 md:px-12 py-10 max-w-4xl">
+        <!-- Chapter header -->
+        <div class="reveal mb-12">
+          <div class="flex items-start justify-between flex-wrap gap-4 mb-6">
+            <div>
+              <p class="text-[.65rem] tracking-[.25em] text-amber/60 mb-2">ANOMALY 01</p>
+              <h1 class="font-typewriter text-3xl md:text-4xl text-paper leading-tight">The Shape of Deception</h1>
+              <p class="text-paper/40 text-xs mt-3 max-w-md leading-relaxed">Every map is a lie. The question is which lie you can afford to believe — and which one will get you killed.</p>
+            </div>
+            <div class="stamp stamp-declassified stamp-animate">DECLASSIFIED</div>
+          </div>
+          <div class="section-divider"></div>
+        </div>
+
+        <!-- Section 1.1: Earth's shape -->
+        <section class="reveal mb-12">
+          <h2 class="font-typewriter text-lg text-amber mb-4 tracking-wide">1.1 — Earth Is Not a Sphere</h2>
+          <div class="flex flex-col lg:flex-row gap-6">
+            <div class="flex-1 text-paper/70 text-sm leading-relaxed space-y-3">
+              <p>Standard military education teaches Earth as an oblate spheroid — an ellipse rotated about its polar axis. The equatorial radius (6,378.137 km) exceeds the polar radius (6,356.752 km) by roughly 21 kilometres.</p>
+              <p>But the real surface — the <span class="text-amber">geoid</span> — is far more irregular. Gravitational anomalies from mantle density variations, ocean trenches, mountain roots, and subsurface structures create a surface that undulates by over 100 metres from the reference ellipsoid.</p>
+              <p>In GIS we call it informally "the potato." In geodesy, it is the equipotential surface of Earth's gravity field that best fits mean sea level. Every coordinate you have ever used sits on an approximation of this shape.</p>
+            </div>
+            <div class="flex-shrink-0 flex items-center justify-center" style="width:240px;height:240px">
+              <svg viewBox="0 0 240 240" width="240" height="240" id="geoid-svg">
+                <!-- Ideal sphere -->
+                <circle cx="120" cy="120" r="90" fill="none" stroke="#2a3a5a" stroke-width="1" stroke-dasharray="4 3"/>
+                <text x="120" y="28" text-anchor="middle" fill="#2a3a5a" font-size="8" font-family="JetBrains Mono">IDEAL SPHERE</text>
+                <!-- Geoid path generated by JS -->
+                <path id="geoid-path" fill="rgba(0,180,180,0.08)" stroke="#00B4B4" stroke-width="1.5"/>
+                <text x="120" y="232" text-anchor="middle" fill="#00B4B4" font-size="8" font-family="JetBrains Mono" opacity=".7">ACTUAL GEOID (exaggerated)</text>
+                <!-- Annotation arrows -->
+                <line x1="210" y1="90" x2="195" y2="95" stroke="#C8860A" stroke-width=".8" marker-end="none"/>
+                <text x="215" y="88" fill="#C8860A" font-size="7" font-family="JetBrains Mono">+85m</text>
+                <line x1="28" y1="155" x2="44" y2="150" stroke="#8B2020" stroke-width=".8"/>
+                <text x="5" y="166" fill="#8B2020" font-size="7" font-family="JetBrains Mono">-106m</text>
+              </svg>
+            </div>
+          </div>
+        </section>
+
+        <div class="section-divider reveal"></div>
+
+        <!-- Section 1.2: Projections -->
+        <section class="reveal mb-12">
+          <h2 class="font-typewriter text-lg text-amber mb-4 tracking-wide">1.2 — The Cartographer's Bargain</h2>
+          <div class="paper-panel rounded p-6 md:p-8 mb-6" style="color:#2a2418">
+            <p class="text-xs opacity-40 font-typewriter mb-3">BRIEFING NOTE — ORIGIN OF THE PROBLEM</p>
+            <p class="text-sm leading-relaxed mb-3">You cannot flatten a sphere without distortion. This is not a limitation of technology — it is a theorem. Gauss's <em>Theorema Egregium</em> (1827) proved that a surface's curvature is an intrinsic property: no flat map can preserve all of area, shape, distance, and direction simultaneously.</p>
+            <p class="text-sm leading-relaxed mb-3">Every map projection is a deliberate choice about <strong>which truth to sacrifice</strong>. Mercator (1569) sacrifices area to preserve angles — invaluable for maritime navigation, where a constant bearing appears as a straight line. But the cost is catastrophic at high latitudes.</p>
+            <p class="text-sm leading-relaxed">Web Mercator (EPSG:3857) — the projection underlying virtually every web map since Google Maps in 2005 — compounds this. It is not even a true conformal projection: it uses a spherical formula for an ellipsoidal Earth, introducing additional systematic error that the specification itself acknowledges: <em>"not to be used for authoritative geodetic purposes."</em></p>
+            <p class="text-xs opacity-40 font-typewriter mt-4 text-right">— SAU/GEODESY DESK, 2024</p>
+          </div>
+          <div class="flex flex-wrap gap-4 text-xs text-paper/50">
+            <div class="border border-[#1e2240] rounded px-4 py-3 flex-1 min-w-[140px]">
+              <p class="text-amber font-data text-base mb-1">Conformal</p>
+              <p>Preserves angles &amp; local shape. Distorts area. Used for navigation.</p>
+            </div>
+            <div class="border border-[#1e2240] rounded px-4 py-3 flex-1 min-w-[140px]">
+              <p class="text-cyan font-data text-base mb-1">Equal-Area</p>
+              <p>Preserves area. Distorts shape. Used for thematic/statistical maps.</p>
+            </div>
+            <div class="border border-[#1e2240] rounded px-4 py-3 flex-1 min-w-[140px]">
+              <p class="text-paper font-data text-base mb-1">Equidistant</p>
+              <p>Preserves distance from centre point. Compromises on area &amp; shape.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="section-divider reveal"></div>
+
+        <!-- Section 1.3: Interactive Map -->
+        <section class="reveal mb-12">
+          <h2 class="font-typewriter text-lg text-amber mb-2 tracking-wide">1.3 — Operation Greenland</h2>
+          <p class="text-paper/50 text-xs mb-6 max-w-lg">Drag the slider to morph between Web Mercator and Equal Earth projections. Watch Greenland shrink to its true size. Hover highlighted regions for data.</p>
+
+          <!-- Map container -->
+          <div class="relative border border-[#1e2240] rounded overflow-hidden bg-[#060a16]" style="height:clamp(320px,50vw,520px)" id="map-container">
+            <div id="map-loading" class="absolute inset-0 flex items-center justify-center z-10">
+              <span class="text-cyan/60 font-data text-xs animate-pulse tracking-wider">LOADING CARTOGRAPHIC DATA...</span>
+            </div>
+            <svg id="map-svg" class="w-full h-full" style="display:none"></svg>
+            <div class="map-tooltip" id="map-tooltip"></div>
+            <!-- Projection label -->
+            <div class="absolute top-3 left-3 font-data text-[.65rem] tracking-wider z-20">
+              <span id="proj-label-merc" class="text-amber/80">WEB MERCATOR</span>
+              <span id="proj-label-eq" class="text-cyan/80" style="display:none">EQUAL EARTH</span>
+            </div>
+            <!-- Area ratio -->
+            <div class="absolute top-3 right-3 text-right font-data text-[.65rem] z-20">
+              <span class="text-paper/40">GREENLAND / AFRICA AREA RATIO</span><br>
+              <span id="area-ratio" class="text-amber text-base font-medium">0.92:1</span>
+              <span id="area-note" class="text-paper/30 text-[.6rem] block">appears similar in Mercator</span>
+            </div>
+          </div>
+
+          <!-- Slider -->
+          <div class="mt-4 flex items-center gap-4 max-w-lg">
+            <span class="text-amber text-xs font-data whitespace-nowrap">MERCATOR</span>
+            <input type="range" id="morph-slider" min="0" max="100" value="0" class="flex-1 accent-amber h-1 cursor-pointer" style="background:linear-gradient(to right,#C8860A,#00B4B4)" aria-label="Projection morph slider">
+            <span class="text-cyan text-xs font-data whitespace-nowrap">EQUAL EARTH</span>
+          </div>
+
+          <!-- Key insight -->
+          <div class="mt-6 paper-panel rounded p-5" style="color:#2a2418">
+            <p class="text-sm leading-relaxed"><strong>The Big Lie:</strong> In Web Mercator, Greenland (<span class="text-redacted font-semibold">2.166 million km²</span>) appears roughly the same size as Africa (<span class="text-redacted font-semibold">30.37 million km²</span>). Africa is actually <strong>14 times larger</strong>. This is not a minor inaccuracy — it is a fundamental inversion of geographic reality that persists because it is convenient for rendering tiles at low zoom levels.</p>
+          </div>
+        </section>
+
+        <div class="section-divider reveal"></div>
+
+        <!-- Section 1.4: Warfare context -->
+        <section class="reveal mb-12">
+          <h2 class="font-typewriter text-lg text-amber mb-4 tracking-wide">1.4 — Tolerance for Error</h2>
+          <div class="space-y-5">
+            <div class="border-l-2 border-amber/30 pl-5">
+              <p class="text-paper/30 text-[.6rem] tracking-wider mb-2">HISTORICAL CONTEXT — WORLD WAR II</p>
+              <p class="text-paper/70 text-sm leading-relaxed">During Operation Overlord (1944), artillery survey teams worked with local datums derived from triangulation networks established decades earlier. A 50-metre position error on a paper map translated directly to a 50-metre miss on the ground. For area bombardment against a dispersed target, this was acceptable. For close-support missions near friendly lines, it was lethal. The maps themselves used local projections — the British Cassini Grid, the French Lambert system — each introducing their own distortions that varied by region.</p>
+            </div>
+            <div class="border-l-2 border-cyan/30 pl-5">
+              <p class="text-paper/30 text-[.6rem] tracking-wider mb-2">MODERN CONTEXT — PRECISION STRIKE</p>
+              <p class="text-paper/70 text-sm leading-relaxed">In 1991, Tomahawk cruise missiles required GPS-derived coordinates mapped to WGS 84, then transformed to the local datum of the target region. The geodetic transformation — the mathematical bridge between two reference frames — had to be accurate to metres. A 1-metre error in the geodetic model could mean the difference between a command bunker destroyed and a civilian shelter hit. Modern JDAMs advertise circular error probable (CEP) of less than 5 metres. The projection and datum are no longer background noise — they are part of the weapon system.</p>
+            </div>
+            <div class="border-l-2 border-redacted/40 pl-5">
+              <p class="text-paper/30 text-[.6rem] tracking-wider mb-2">THE FUNDAMENTAL CONSTANT</p>
+              <p class="text-paper/70 text-sm leading-relaxed">The geodesy has not changed. The ellipsoid models, the gravity field measurements, the coordinate transformations — the mathematics is the same mathematics used at the International Bureau of Weights and Measures in 1924. What changed is the <span class="text-amber font-medium">tolerance for error</span>. When your weapon flies itself to within 3 metres of a coordinate, every metre of projection distortion is a metre of risk.</p>
+            </div>
+
+            <!-- Redacted intelligence block -->
+            <div class="paper-panel rounded p-5 mt-6" style="color:#2a2418">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="stamp stamp-classified text-[.55rem] py-0 px-2" style="transform:rotate(-5deg)">CLASSIFIED</div>
+                <span class="text-xs opacity-40 font-typewriter">INTERCEPTED CORRESPONDENCE — GRID REFERENCE CORRELATION</span>
+              </div>
+              <p class="text-sm leading-relaxed mb-2">Subject's last known position correlated to <span class="redacted"><span class="hidden-text">14°17'N</span></span> via Operation Greenland datum reconciliation. Anomaly 02 access code derived from correlation sequence:</p>
+              <p class="text-base font-data tracking-[.3em] mt-2 mb-1">ACCESS CODE: <span class="redacted"><span class="hidden-text">1417</span></span></p>
+              <p class="text-[.65rem] opacity-30 mt-2">[Hover over redacted blocks to declassify]</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="section-divider reveal"></div>
+
+        <!-- Section 1.5: Code entry -->
+        <section class="reveal mb-16">
+          <h2 class="font-typewriter text-lg text-amber mb-4 tracking-wide">1.5 — Anomaly 02 Access</h2>
+          <p class="text-paper/50 text-xs mb-6">Enter the four-digit correlation code recovered from the classified briefing above to unlock the next anomaly.</p>
+          <div class="flex items-center gap-5">
+            <input type="text" id="code-input" class="code-input" maxlength="4" placeholder="----" autocomplete="off" aria-label="Enter 4-digit anomaly code">
+            <button id="code-btn" onclick="submitCode()" class="px-5 py-2.5 bg-amber/10 border border-amber/40 text-amber font-typewriter text-xs tracking-widest hover:bg-amber/20 transition-all focus:outline-none focus:ring-2 focus:ring-amber/30">VERIFY</button>
+          </div>
+          <div id="code-feedback" class="mt-4" style="min-height:40px"></div>
+        </section>
+
+      </article>
+
+      <!-- ===== CHAPTER 2 (Locked) ===== -->
+      <article id="chapter-2" class="px-6 md:px-12 py-10 max-w-4xl" style="display:none">
+        <div class="flex flex-col items-center justify-center py-32 text-center">
+          <div class="stamp stamp-classified stamp-animate mb-6" style="transform:rotate(-5deg) scale(1.2)">CLASSIFIED</div>
+          <h2 class="font-typewriter text-2xl text-paper/40 mb-3">Anomaly 02 — Language of Locations</h2>
+          <p class="text-paper/20 text-xs max-w-sm">Coordinate systems, celestial and terrestrial frames, datum reconciliation, and the challenge of making different entities speak the same spatial language.</p>
+          <p class="text-redacted/50 text-[.65rem] mt-6 font-data tracking-wider">REQUIRES ANOMALY CODE TO ACCESS</p>
+        </div>
+      </article>
+
+      <!-- ===== CHAPTER 3 (Locked) ===== -->
+      <article id="chapter-3" class="px-6 md:px-12 py-10 max-w-4xl" style="display:none">
+        <div class="flex flex-col items-center justify-center py-32 text-center">
+          <div class="stamp stamp-classified stamp-animate mb-6" style="transform:rotate(-5deg) scale(1.2)">CLASSIFIED</div>
+          <h2 class="font-typewriter text-2xl text-paper/40 mb-3">Anomaly 03 — Measurements from Orbit</h2>
+          <p class="text-paper/20 text-xs max-w-sm">Geodesic versus geometric measurement, orbital imaging challenges, satellite motion compensation, and getting the picture from orbit to the ground.</p>
+          <p class="text-redacted/50 text-[.65rem] mt-6 font-data tracking-wider">REQUIRES ANOMALY CODE TO ACCESS</p>
+        </div>
+      </article>
+
+      <!-- ===== CHAPTER 4 (Locked) ===== -->
+      <article id="chapter-4" class="px-6 md:px-12 py-10 max-w-4xl" style="display:none">
+        <div class="flex flex-col items-center justify-center py-32 text-center">
+          <div class="stamp stamp-classified stamp-animate mb-6" style="transform:rotate(-5deg) scale(1.2)">CLASSIFIED</div>
+          <h2 class="font-typewriter text-2xl text-paper/40 mb-3">Anomaly 04 — The Way Ahead</h2>
+          <p class="text-paper/20 text-xs max-w-sm">From hand-drawn artillery maps to AI-augmented geospatial intelligence. How GIS evolved across eras of warfare — and where it goes next.</p>
+          <p class="text-redacted/50 text-[.65rem] mt-6 font-data tracking-wider">REQUIRES ANOMALY CODE TO ACCESS</p>
+        </div>
+      </article>
+
+    </main>
+  </div>
+</div>
+
+<script>
+/* ============================
+   STATE
+   ============================ */
+const state = {
+  currentChapter: 1,
+  unlocked: { 1: true, 2: false, 3: false, 4: false },
+  codes: { 2: '1417', 3: '0000', 4: '0000' },
+  mapReady: false,
+  audioStarted: false
+};
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ============================
+   AUDIO ENGINE (Web Audio API synthesis)
+   ============================ */
+let audioCtx = null;
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playClick() {
+  if (!audioCtx) return;
+  const dur = 0.04;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.008));
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'bandpass';
+  filt.frequency.value = 1800 + Math.random() * 1200;
+  filt.Q.value = 1.5;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.12;
+  src.connect(filt).connect(gain).connect(audioCtx.destination);
+  src.start();
+}
+
+function playRustle() {
+  if (!audioCtx) return;
+  const dur = 0.35;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const env = Math.sin(Math.PI * i / d.length);
+    d[i] = (Math.random() * 2 - 1) * env * 0.3;
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 600;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.08;
+  src.connect(filt).connect(gain).connect(audioCtx.destination);
+  src.start();
+}
+
+function playStamp() {
+  if (!audioCtx) return;
+  const dur = 0.15;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const env = Math.exp(-i / (audioCtx.sampleRate * 0.03));
+    d[i] = (Math.random() * 2 - 1) * env;
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 200;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.2;
+  src.connect(filt).connect(gain).connect(audioCtx.destination);
+  src.start();
+}
+
+function playStatic() {
+  if (!audioCtx) return;
+  const dur = 0.2;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.06)) * 0.15;
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.06;
+  src.connect(gain).connect(audioCtx.destination);
+  src.start();
+}
+
+/* ============================
+   UTILITIES
+   ============================ */
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ============================
+   OPENING SEQUENCE
+   ============================ */
+const openingLines = [
+  'ALBATROSS INTELLIGENCE DIVISION',
+  'SPATIAL ANALYSIS UNIT — SINGAPORE STATION',
+  '',
+  'You have been assigned to COORDINATE ZERO.',
+  'Four anomalies. Four locations. One mission.',
+  '',
+  'Your clearance has been verified.',
+  'Opening dossier...'
+];
+
+async function beginSequence() {
+  initAudio();
+  state.audioStarted = true;
+  const btn = document.getElementById('start-btn');
+  btn.style.display = 'none';
+
+  const container = document.getElementById('opening-text');
+  const p = container.querySelector('p');
+
+  if (reducedMotion) {
+    // Skip typewriter for reduced motion
+    openingLines.forEach(line => {
+      const newP = document.createElement('p');
+      newP.className = 'text-amber font-typewriter text-sm md:text-base tracking-widest mb-1';
+      newP.textContent = line;
+      container.appendChild(newP);
+    });
+    p.remove();
+    await sleep(500);
+  } else {
+    for (let i = 0; i < openingLines.length; i++) {
+      const line = openingLines[i];
+      if (i === 0) {
+        p.textContent = '';
+      } else {
+        const newP = document.createElement('p');
+        newP.className = 'text-amber font-typewriter text-sm md:text-base tracking-widest mb-1';
+        if (i === openingLines.length - 1) newP.classList.add('tw-cursor');
+        container.appendChild(newP);
+      }
+      const target = container.children[i];
+      for (let j = 0; j < line.length; j++) {
+        target.textContent += line[j];
+        if (line[j] !== ' ' && line[j] !== '' && Math.random() > 0.3) playClick();
+        await sleep(line === '' ? 200 : 35 + Math.random() * 25);
+      }
+      await sleep(line === '' ? 300 : 150);
+    }
+  }
+
+  await sleep(800);
+
+  // Show folder
+  const folderContainer = document.getElementById('folder-container');
+  folderContainer.style.display = 'block';
+  playRustle();
+  await sleep(600);
+
+  // Open folder
+  document.getElementById('folder').classList.add('folder-open');
+  playRustle();
+  await sleep(1600);
+
+  // Fade out opening
+  const opening = document.getElementById('opening');
+  opening.style.transition = 'opacity 0.8s ease';
+  opening.style.opacity = '0';
+  await sleep(800);
+
+  opening.style.display = 'none';
+
+  // Show dossier
+  const dossier = document.getElementById('dossier');
+  dossier.style.display = 'block';
+  dossier.style.opacity = '0';
+  dossier.style.transition = 'opacity 0.6s ease';
+  requestAnimationFrame(() => { dossier.style.opacity = '1'; });
+
+  // Initialize scroll reveals
+  initReveals();
+  // Initialize map
+  initMap();
+  // Start dust
+  initDust();
+  // Start coordinate display
+  startCoordDisplay();
+}
+
+/* ============================
+   DUST PARTICLES
+   ============================ */
+function initDust() {
+  if (reducedMotion) return;
+  const canvas = document.getElementById('dust-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const particles = Array.from({ length: 35 }, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    size: Math.random() * 1.2 + 0.4,
+    vx: (Math.random() - 0.5) * 0.25,
+    vy: (Math.random() - 0.5) * 0.15 - 0.08,
+    opacity: Math.random() * 0.2 + 0.05
+  }));
+
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < 0) p.x = w;
+      if (p.x > w) p.x = 0;
+      if (p.y < 0) p.y = h;
+      if (p.y > h) p.y = 0;
+      ctx.fillStyle = `rgba(200,180,140,${p.opacity})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(0.1, p.size), 0, Math.PI * 2);
+      ctx.fill();
+    });
+    requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+/* ============================
+   COORDINATE DISPLAY
+   ============================ */
+function startCoordDisplay() {
+  const el = document.getElementById('coord-display');
+  const bases = [
+    [1.3521, 103.8198], // Singapore
+    [64.1336, -21.8953], // Greenland
+    [0.0, 37.0],        // Kenya (Africa centre)
+    [51.5074, -0.1278],  // London
+    [38.8951, -77.0364], // Pentagon
+  ];
+  let idx = 0;
+  setInterval(() => {
+    idx = (idx + 1) % bases.length;
+    const [lat, lon] = bases[idx];
+    const ns = lat >= 0 ? 'N' : 'S';
+    const ew = lon >= 0 ? 'E' : 'W';
+    el.textContent = `${Math.abs(lat).toFixed(4)}°${ns} ${Math.abs(lon).toFixed(4)}°${ew}`;
+  }, 4000);
+}
+
+/* ============================
+   SCROLL REVEALS
+   ============================ */
+function initReveals() {
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) e.target.classList.add('visible');
+    });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+}
+
+/* ============================
+   CHAPTER NAVIGATION
+   ============================ */
+function switchChapter(n) {
+  if (!state.unlocked[n]) {
+    playStatic();
+    return;
+  }
+  state.currentChapter = n;
+
+  // Hide all chapters
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('chapter-' + i);
+    if (el) el.style.display = i === n ? 'block' : 'none';
+  }
+
+  // Update sidebar tabs
+  document.querySelectorAll('.ch-tab').forEach(tab => {
+    const ch = parseInt(tab.dataset.ch);
+    tab.classList.toggle('active', ch === n);
+  });
+
+  // Update mobile nav
+  document.querySelectorAll('#mobile-nav button').forEach(btn => {
+    const ch = parseInt(btn.dataset.ch);
+    if (ch === n) {
+      btn.classList.add('text-amber', 'border-amber');
+      btn.classList.remove('text-paper/30', 'border-transparent');
+    } else {
+      btn.classList.remove('text-amber', 'border-amber');
+      btn.classList.add('text-paper/30', 'border-transparent');
+    }
+  });
+
+  // Scroll to top
+  document.getElementById('content-scroll').scrollTop = 0;
+
+  // Re-trigger reveals for new chapter
+  setTimeout(initReveals, 50);
+}
+
+/* ============================
+   CODE ENTRY
+   ============================ */
+function submitCode() {
+  const input = document.getElementById('code-input');
+  const feedback = document.getElementById('code-feedback');
+  const code = input.value.trim();
+
+  if (code.length !== 4) {
+    showCodeFeedback('error', 'INPUT MUST BE FOUR DIGITS');
+    return;
+  }
+
+  // Check against all locked chapters
+  let matched = false;
+  for (let ch = 2; ch <= 4; ch++) {
+    if (!state.unlocked[ch] && code === state.codes[ch]) {
+      // Unlock chapter
+      state.unlocked[ch] = true;
+      matched = true;
+
+      // Update sidebar tab
+      const tab = document.querySelector(`.ch-tab[data-ch="${ch}"]`);
+      tab.classList.remove('locked');
+      const lockText = tab.querySelector('.text-redacted');
+      if (lockText) lockText.remove();
+
+      // Update progress bar
+      document.getElementById('prog-' + ch).classList.remove('bg-[#1e2240]');
+      document.getElementById('prog-' + ch).classList.add('bg-amber');
+
+      showCodeFeedback('verified', `ANOMALY ${String(ch).padStart(2, '0')} UNLOCKED — PROCEED TO DOSSIER TAB`);
+
+      // Auto-switch after delay
+      setTimeout(() => switchChapter(ch), 2000);
+      break;
+    }
+  }
+
+  if (!matched) {
+    showCodeFeedback('error', 'CODE REJECTED — ACCESS DENIED');
+  }
+}
+
+function showCodeFeedback(type, msg) {
+  const fb = document.getElementById('code-feedback');
+  const input = document.getElementById('code-input');
+  fb.innerHTML = '';
+
+  const stamp = document.createElement('div');
+  stamp.className = `stamp stamp-animate ${type === 'verified' ? 'stamp-verified' : 'stamp-error'}`;
+  stamp.textContent = type === 'verified' ? 'VERIFIED' : 'ERROR DETECTED';
+  fb.appendChild(stamp);
+
+  const text = document.createElement('p');
+  text.className = `text-xs mt-2 font-data tracking-wider ${type === 'verified' ? 'text-amber' : 'text-redacted'}`;
+  text.textContent = msg;
+  fb.appendChild(text);
+
+  if (type === 'error') {
+    playStatic();
+    input.classList.add('shake');
+    setTimeout(() => input.classList.remove('shake'), 400);
+  } else {
+    playStamp();
+  }
+}
+
+// Enter key on code input
+document.getElementById('code-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitCode();
+});
+
+/* ============================
+   GEOID SVG GENERATION
+   ============================ */
+(function buildGeoid() {
+  const path = document.getElementById('geoid-path');
+  let d = '';
+  for (let angle = 0; angle <= 360; angle += 2) {
+    const rad = angle * Math.PI / 180;
+    const baseR = 90;
+    // Exaggerated geoid undulations
+    const pert = 4 * Math.sin(3 * rad) + 2.5 * Math.cos(5 * rad + 0.7) + 5 * Math.sin(7 * rad + 1.3) + 1.5 * Math.cos(11 * rad + 2);
+    const r = baseR + pert;
+    const x = 120 + r * Math.cos(rad);
+    const y = 120 + r * Math.sin(rad);
+    d += (angle === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+  }
+  d += 'Z';
+  path.setAttribute('d', d);
+})();
+
+/* ============================
+   D3 MAP — PROJECTION MORPH
+   ============================ */
+const AFRICA_IDS = new Set([
+  '012','204','072','854','108','120','140','148','174','178','180',
+  '384','262','818','226','232','231','266','270','288','324','624',
+  '404','426','430','434','450','454','466','478','480','504','508',
+  '516','562','566','646','678','686','690','694','706','710','728',
+  '729','748','834','768','788','800','732','894','716'
+]);
+
+let mapProjection, mapPath, mapSvg, mapCountries;
+let mercScale, mercTranslate, eqScale, eqTranslate;
+
+async function initMap() {
+  const container = document.getElementById('map-container');
+  const svg = d3.select('#map-svg');
+  mapSvg = svg;
+
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+
+  svg.attr('viewBox', `0 0 ${width} ${height}`);
+
+  try {
+    const resp = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    if (!resp.ok) throw new Error('Failed to load');
+    const world = await resp.json();
+    mapCountries = topojson.feature(world, world.objects.countries);
+
+    // Fit both projections
+    const mercFit = d3.geoMercator().fitSize([width, height], mapCountries);
+    const eqFit = d3.geoEqualEarth().fitSize([width, height], mapCountries);
+
+    mercScale = mercFit.scale();
+    mercTranslate = mercFit.translate();
+    eqScale = eqFit.scale();
+    eqTranslate = eqFit.translate();
+
+    mapProjection = makeProjection(0);
+    mapPath = d3.geoPath(mapProjection);
+
+    // Draw graticule
+    const graticule = d3.geoGraticule10();
+    svg.append('path')
+      .datum(graticule)
+      .attr('class', 'graticule')
+      .attr('d', mapPath)
+      .attr('fill', 'none')
+      .attr('stroke', 'rgba(0,180,180,0.08)')
+      .attr('stroke-width', 0.5);
+
+    // Draw countries
+    svg.selectAll('path.country')
+      .data(mapCountries.features)
+      .enter()
+      .append('path')
+      .attr('class', 'country')
+      .attr('d', mapPath)
+      .attr('fill', d => {
+        if (d.id === '304') return '#C8860A';
+        if (AFRICA_IDS.has(d.id)) return 'rgba(0,180,180,0.35)';
+        return 'rgba(200,200,200,0.08)';
+      })
+      .attr('stroke', d => {
+        if (d.id === '304') return '#E5A820';
+        if (AFRICA_IDS.has(d.id)) return 'rgba(0,180,180,0.5)';
+        return 'rgba(200,200,200,0.12)';
+      })
+      .attr('stroke-width', d => (d.id === '304' || AFRICA_IDS.has(d.id)) ? 1 : 0.3)
+      .style('cursor', d => (d.id === '304' || AFRICA_IDS.has(d.id)) ? 'pointer' : 'default')
+      .on('mouseenter', function(event, d) {
+        if (d.id === '304' || AFRICA_IDS.has(d.id)) {
+          d3.select(this).attr('fill', d.id === '304' ? '#E5A820' : 'rgba(0,180,180,0.55)');
+          showMapTooltip(event, d);
+        }
+      })
+      .on('mousemove', function(event, d) {
+        if (d.id === '304' || AFRICA_IDS.has(d.id)) moveMapTooltip(event);
+      })
+      .on('mouseleave', function(event, d) {
+        if (d.id === '304' || AFRICA_IDS.has(d.id)) {
+          d3.select(this).attr('fill', d.id === '304' ? '#C8860A' : 'rgba(0,180,180,0.35)');
+          hideMapTooltip();
+        }
+      });
+
+    // Labels
+    const greenlandCentroid = mapPath.centroid(mapCountries.features.find(f => f.id === '304'));
+    if (greenlandCentroid[0] && !isNaN(greenlandCentroid[0])) {
+      svg.append('text')
+        .attr('x', greenlandCentroid[0])
+        .attr('y', greenlandCentroid[1])
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('fill', '#0a0f1e')
+        .attr('font-size', '9px')
+        .attr('font-family', 'JetBrains Mono')
+        .attr('font-weight', '600')
+        .attr('pointer-events', 'none')
+        .text('GREENLAND');
+    }
+
+    // Show SVG, hide loading
+    document.getElementById('map-loading').style.display = 'none';
+    svg.style.display = 'block';
+    state.mapReady = true;
+
+    // Update area ratio display
+    updateAreaRatio(0);
+
+  } catch (err) {
+    document.getElementById('map-loading').innerHTML =
+      '<span class="text-redacted/60 font-data text-xs">CARTOGRAPHIC DATA UNAVAILABLE — CHECK CONNECTION</span>';
+    console.error('Map load error:', err);
+  }
+}
+
+function makeProjection(t) {
+  const s = mercScale + (eqScale - mercScale) * t;
+  const tx = mercTranslate[0] + (eqTranslate[0] - mercTranslate[0]) * t;
+  const ty = mercTranslate[1] + (eqTranslate[1] - mercTranslate[1]) * t;
+
+  return d3.geoProjection(function(lambda, phi) {
+    const m = d3.geoMercatorRaw(lambda, phi);
+    const e = d3.geoEqualEarthRaw(lambda, phi);
+    return [
+      m[0] + (e[0] - m[0]) * t,
+      m[1] + (e[1] - m[1]) * t
+    ];
+  }).scale(s).translate([tx, ty]).clipAngle(82).precision(0.2);
+}
+
+function updateAreaRatio(t) {
+  if (!mapCountries) return;
+  const proj = makeProjection(t);
+  const pathGen = d3.geoPath(proj);
+
+  const greenland = mapCountries.features.find(f => f.id === '304');
+  const africaFeatures = mapCountries.features.filter(f => AFRICA_IDS.has(f.id));
+  const africaCollection = { type: 'FeatureCollection', features: africaFeatures };
+
+  const gArea = pathGen.area(greenland);
+  const aArea = pathGen.area(africaCollection);
+
+  const ratio = aArea > 0 ? (gArea / aArea) : 0;
+  const trueRatio = 2.166 / 30.37; // ~0.071
+
+  const ratioEl = document.getElementById('area-ratio');
+  const noteEl = document.getElementById('area-note');
+
+  if (t < 0.3) {
+    ratioEl.textContent = ratio.toFixed(2) + ':1';
+    ratioEl.style.color = '#C8860A';
+    noteEl.textContent = 'appears similar in Mercator — this is the lie';
+  } else if (t > 0.7) {
+    ratioEl.textContent = '0.07:1';
+    ratioEl.style.color = '#00B4B4';
+    noteEl.textContent = 'true ratio — Africa is 14x larger';
+  } else {
+    ratioEl.textContent = ratio.toFixed(2) + ':1';
+    ratioEl.style.color = '#E8E4D9';
+    noteEl.textContent = 'morphing between projections...';
+  }
+
+  // Update projection label
+  const mercLabel = document.getElementById('proj-label-merc');
+  const eqLabel = document.getElementById('proj-label-eq');
+  if (t < 0.3) {
+    mercLabel.style.display = 'inline';
+    eqLabel.style.display = 'none';
+  } else if (t > 0.7) {
+    mercLabel.style.display = 'none';
+    eqLabel.style.display = 'inline';
+  } else {
+    mercLabel.style.display = 'inline';
+    eqLabel.style.display = 'inline';
+    mercLabel.style.opacity = 1 - (t - 0.3) / 0.4;
+    eqLabel.style.opacity = (t - 0.3) / 0.4;
+  }
+}
+
+// Slider interaction
+document.getElementById('morph-slider').addEventListener('input', function() {
+  if (!state.mapReady) return;
+  const t = +this.value / 100;
+  mapProjection = makeProjection(t);
+  mapPath.projection(mapProjection);
+
+  mapSvg.selectAll('path.country').attr('d', mapPath);
+  mapSvg.selectAll('path.graticule').attr('d', mapPath);
+
+  updateAreaRatio(t);
+});
+
+// Map tooltip
+const tooltip = document.getElementById('map-tooltip');
+
+function showMapTooltip(event, d) {
+  let html = '';
+  if (d.id === '304') {
+    html = '<strong>GREENLAND</strong> — 2,166,000 km²<br>Self-governing territory of Denmark';
+  } else if (AFRICA_IDS.has(d.id)) {
+    html = '<strong>AFRICA</strong> — 30,370,000 km²<br>54 sovereign states — largest continent by area variance';
+  }
+  tooltip.innerHTML = html;
+  tooltip.classList.add('show');
+  moveMapTooltip(event);
+}
+
+function moveMapTooltip(event) {
+  const container = document.getElementById('map-container');
+  const rect = container.getBoundingClientRect();
+  tooltip.style.left = (event.clientX - rect.left + 12) + 'px';
+  tooltip.style.top = (event.clientY - rect.top - 10) + 'px';
+}
+
+function hideMapTooltip() {
+  tooltip.classList.remove('show');
+}
+
+/* ============================
+   WINDOW RESIZE — redraw map
+   ============================ */
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.mapReady) {
+      // Reload map on significant resize
+      const container = document.getElementById('map-container');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      mapSvg.attr('viewBox', `0 0 ${w} ${h}`);
+
+      const mercFit = d3.geoMercator().fitSize([w, h], mapCountries);
+      const eqFit = d3.geoEqualEarth().fitSize([w, h], mapCountries);
+      mercScale = mercFit.scale();
+      mercTranslate = mercFit.translate();
+      eqScale = eqFit.scale();
+      eqTranslate = eqFit.translate();
+
+      const t = +document.getElementById('morph-slider').value / 100;
+      mapProjection = makeProjection(t);
+      mapPath.projection(mapProjection);
+      mapSvg.selectAll('path').attr('d', mapPath);
+      updateAreaRatio(t);
+    }
+  }, 250);
+});
+</script>
+</body>
+</html>
