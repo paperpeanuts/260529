@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALBATROSS — Coordinate Zero</title>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{--bg:#0A0F1E;--bg-light:#0D0D0D;--fg:#E8E4D9;--muted:#7A7568;--amber:#C8860A;--amber-dim:#8B5E06;--cyan:#00B4B4;--cyan-dim:#007A7A;--red:#8B2020;--red-bright:#C43030;--paper:#D4CFC2;--paper-dark:#B8B2A2;--card:#131829;--border:#2A2F42}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Mono',monospace;background:var(--bg);color:var(--fg);overflow:hidden;height:100vh;width:100vw}
+h1,h2,h3,h4,h5,h6,.typewriter-text,.stamp-text{font-family:'Special Elite',cursive}
+.mono-data{font-family:'JetBrains Mono',monospace}
+.paper-overlay{position:relative}
+.paper-overlay::before{content:'';position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.1'/%3E%3C/svg%3E");opacity:0.12;pointer-events:none;border-radius:inherit;z-index:1}
+.typewriter-cursor{display:inline-block;width:10px;height:1.2em;background:var(--amber);animation:cursorBlink .6s step-end infinite;vertical-align:text-bottom;margin-left:2px}
+@keyframes cursorBlink{0%,100%{opacity:1}50%{opacity:0}}
+.redacted-bar{position:relative;display:inline;cursor:pointer}
+.redacted-bar .redacted-cover{background:#1a1a1a;color:transparent;padding:1px 6px;border-radius:2px;transition:all .5s ease;user-select:none;position:relative}
+.redacted-bar:hover .redacted-cover,.redacted-bar.revealed .redacted-cover{background:transparent;color:var(--cyan);text-shadow:0 0 8px rgba(0,180,180,.4)}
+.redacted-bar .redacted-cover::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(0,180,180,.15) 50%,transparent 100%);opacity:0;transition:opacity .3s}
+.redacted-bar:hover .redacted-cover::after{opacity:1;animation:scanLine 1.5s linear infinite}
+@keyframes scanLine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.stamp{display:inline-block;border:3px solid;padding:4px 16px;transform:rotate(-8deg);font-family:'Special Elite',cursive;font-size:.85rem;letter-spacing:3px;text-transform:uppercase;opacity:0;transition:opacity .1s;position:relative}
+.stamp.visible{opacity:.75;animation:stampSlam .3s ease-out}
+.stamp-classified{border-color:var(--red-bright);color:var(--red-bright)}
+.stamp-declassified{border-color:var(--cyan);color:var(--cyan);transform:rotate(-5deg)}
+@keyframes stampSlam{0%{transform:rotate(-8deg) scale(2.5);opacity:0}60%{transform:rotate(-8deg) scale(.95);opacity:.9}100%{transform:rotate(-8deg) scale(1);opacity:.75}}
+.chapter-tab{writing-mode:vertical-rl;text-orientation:mixed;padding:16px 8px;cursor:pointer;border-left:3px solid transparent;transition:all .3s ease;position:relative;letter-spacing:2px;font-family:'Special Elite',cursive;font-size:.7rem;min-height:120px;display:flex;align-items:center;justify-content:center}
+.chapter-tab:hover{background:rgba(200,134,10,.05)}
+.chapter-tab.active{border-left-color:var(--amber);background:rgba(200,134,10,.08);color:var(--amber)}
+.chapter-tab.locked{color:var(--muted);opacity:.5}
+.chapter-tab.locked:hover{opacity:.7}
+.map-grid line{stroke:rgba(0,180,180,.12);stroke-width:.5}
+.map-grid line.major{stroke:rgba(0,180,180,.22);stroke-width:.8}
+.greenland-mercator{fill:rgba(200,134,10,.35);stroke:var(--amber);stroke-width:1.5}
+.greenland-extracted{fill:rgba(200,134,10,.5);stroke:var(--amber);stroke-width:2;cursor:grab;filter:drop-shadow(0 0 6px rgba(200,134,10,.4));transition:filter .2s}
+.greenland-extracted:hover{filter:drop-shadow(0 0 12px rgba(200,134,10,.7))}
+.greenland-extracted.dragging{cursor:grabbing;filter:drop-shadow(0 0 16px rgba(200,134,10,.9))}
+.africa-shape{fill:rgba(0,180,180,.2);stroke:var(--cyan);stroke-width:1.5}
+.deproj-slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;background:var(--border);border-radius:2px;outline:none}
+.deproj-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;background:var(--amber);border-radius:50%;cursor:pointer;box-shadow:0 0 8px rgba(200,134,10,.5)}
+.deproj-slider::-moz-range-thumb{width:18px;height:18px;background:var(--amber);border-radius:50%;cursor:pointer;border:none;box-shadow:0 0 8px rgba(200,134,10,.5)}
+.code-digit{width:48px;height:56px;background:rgba(0,180,180,.05);border:1px solid var(--border);color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:1.4rem;text-align:center;outline:none;transition:all .3s}
+.code-digit:focus{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,180,180,.2)}
+.custom-scroll::-webkit-scrollbar{width:6px}
+.custom-scroll::-webkit-scrollbar-track{background:transparent}
+.custom-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.fade-in-up{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.fade-in-up.visible{opacity:1;transform:translateY(0)}
+.shape-btn{padding:6px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:.7rem;cursor:pointer;transition:all .3s;letter-spacing:1px}
+.shape-btn.active{border-color:var(--amber);color:var(--amber);background:rgba(200,134,10,.08)}
+.shape-btn:hover:not(.active){border-color:var(--muted);color:var(--fg)}
+.digit-flash{animation:digitReveal .6s ease}
+@keyframes digitReveal{0%{color:#fff;text-shadow:0 0 20px var(--cyan);transform:scale(1.5)}100%{color:var(--cyan);text-shadow:0 0 8px rgba(0,180,180,.4);transform:scale(1)}}
+.section-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:2.5rem 0}
+.skip-btn{position:absolute;bottom:24px;right:32px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:.7rem;cursor:pointer;opacity:.4;transition:opacity .3s;background:none;border:none;letter-spacing:1px}
+.skip-btn:hover{opacity:1}
+.toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--card);border:1px solid var(--border);padding:12px 24px;border-radius:4px;font-size:.8rem;z-index:100;opacity:0;transition:all .4s ease;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.map-bg-overlay{position:absolute;inset:0;background:linear-gradient(rgba(10,15,30,.92),rgba(10,15,30,.95)),repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(0,180,180,.03) 39px,rgba(0,180,180,.03) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(0,180,180,.03) 39px,rgba(0,180,180,.03) 40px);pointer-events:none;z-index:0}
+.intel-table{width:100%;border-collapse:collapse;font-size:.72rem}
+.intel-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--amber-dim);color:var(--amber);font-weight:500;letter-spacing:1px;font-size:.65rem}
+.intel-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--fg)}
+.intel-table tr:hover td{background:rgba(200,134,10,.04)}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 4px rgba(0,180,180,.2)}50%{box-shadow:0 0 16px rgba(0,180,180,.5)}}
+.code-digit.correct{border-color:#4A7A4A;color:#4A7A4A;animation:pulseGlow 1s ease 2}
+.code-digit.wrong{border-color:var(--red-bright);color:var(--red-bright);animation:none}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media(max-width:768px){.chapter-tab{min-height:80px;font-size:.6rem;padding:10px 6px}.content-body{padding:1rem!important}}
+</style>
+</head>
+<body>
+
+<!-- ========== OPENING SCREEN ========== -->
+<div id="opening-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center" style="background:var(--bg)">
+  <div class="map-bg-overlay"></div>
+  <div class="relative z-10 max-w-2xl w-full px-8">
+    <div id="typewriter-container" class="space-y-4"></div>
+    <div id="cursor-holder" class="typewriter-cursor" style="display:none"></div>
+  </div>
+  <button class="skip-btn" onclick="skipOpening()" aria-label="Skip intro">SKIP INTRO [ESC]</button>
+</div>
+
+<!-- ========== MAIN INTERFACE ========== -->
+<div id="main-interface" class="fixed inset-0 flex flex-col" style="display:none;opacity:0">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between px-5 py-3 border-b" style="border-color:var(--border);background:rgba(10,15,30,.95);min-height:48px">
+    <div class="flex items-center gap-3">
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background:var(--amber)"></div>
+      <span class="typewriter-text text-sm tracking-widest" style="color:var(--amber)">ALBATROSS</span>
+      <span class="text-xs tracking-wider" style="color:var(--muted)">SPATIAL ANALYSIS UNIT</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="mono-data text-xs" style="color:var(--muted)">DOSSIER: <span id="dossier-count" style="color:var(--cyan)">0/4</span> RESOLVED</span>
+      <span class="mono-data text-xs px-2 py-1 rounded" style="border:1px solid var(--border);color:var(--muted)">CLEARANCE: ZERO</span>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Sidebar -->
+    <nav class="flex flex-col border-r" style="border-color:var(--border);background:rgba(10,15,30,.6);width:54px;min-width:54px" aria-label="Chapter navigation">
+      <div class="chapter-tab active" data-chapter="1" onclick="navigateChapter(1)" role="tab" aria-selected="true" tabindex="0"><span>ALPHA</span></div>
+      <div class="chapter-tab locked" data-chapter="2" onclick="navigateChapter(2)" role="tab" tabindex="-1"><i class="fa-solid fa-lock text-xs mb-1" style="color:var(--red)"></i><span>BRAVO</span></div>
+      <div class="chapter-tab locked" data-chapter="3" onclick="navigateChapter(3)" role="tab" tabindex="-1"><i class="fa-solid fa-lock text-xs mb-1" style="color:var(--red)"></i><span>CHARLIE</span></div>
+      <div class="chapter-tab locked" data-chapter="4" onclick="navigateChapter(4)" role="tab" tabindex="-1"><i class="fa-solid fa-lock text-xs mb-1" style="color:var(--red)"></i><span>DELTA</span></div>
+    </nav>
+
+    <!-- Content Area -->
+    <main id="content-area" class="flex-1 overflow-y-auto custom-scroll relative" style="background:var(--bg)">
+      <div class="map-bg-overlay"></div>
+
+      <!-- ===== CHAPTER 1 ===== -->
+      <div id="chapter-1" class="relative z-10 content-body" style="padding:2.5rem 3rem;max-width:900px;margin:0 auto">
+
+        <div class="flex items-center gap-4 mb-2">
+          <span class="mono-data text-xs tracking-wider" style="color:var(--muted)">ANOMALY 001</span>
+          <span class="stamp stamp-classified visible" style="font-size:.65rem;padding:2px 10px;opacity:.6">CLASSIFIED</span>
+        </div>
+        <h1 class="text-3xl mb-1 tracking-wide" style="color:var(--amber)">THE BIG LIE</h1>
+        <p class="text-sm mb-8" style="color:var(--muted)">Projections, Distortions, and the Cartographic Deception That Shapes Military Decision-Making</p>
+
+        <!-- 1.1 Earth Shape -->
+        <section class="fade-in-up mb-8">
+          <h2 class="text-lg mb-4 tracking-wide" style="color:var(--fg)">1.1 — THE SHAPE OF TRUTH</h2>
+          <p class="text-sm leading-relaxed mb-4" style="color:var(--paper-dark)">Every military operation begins with a deceptively simple question: <span style="color:var(--fg)">where is it?</span> The answer depends on what you think "where" means — and more critically, what shape you believe the ground beneath you to be.</p>
+          <div class="flex flex-col items-center my-6">
+            <svg id="geoid-svg" width="320" height="200" viewBox="0 0 320 200">
+              <path id="geoid-path" d="" fill="none" stroke="var(--amber)" stroke-width="1.5" opacity=".9"/>
+              <path id="geoid-path-fill" d="" fill="rgba(200,134,10,.06)" stroke="none"/>
+            </svg>
+            <div class="flex gap-2 mt-3">
+              <button class="shape-btn active" data-shape="sphere" onclick="morphTo('sphere')">SPHERE</button>
+              <button class="shape-btn" data-shape="ellipsoid" onclick="morphTo('ellipsoid')">ELLIPSOID</button>
+              <button class="shape-btn" data-shape="geoid" onclick="morphTo('geoid')">GEOID</button>
+            </div>
+            <p id="shape-label" class="mono-data text-xs mt-3 text-center" style="color:var(--muted);min-height:2.5em">Perfect sphere — assumed by early navigators. Error: up to 21km at the poles.</p>
+          </div>
+          <p class="text-sm leading-relaxed mb-3" style="color:var(--paper-dark)">The Earth is not a sphere. It is not even an ellipsoid. It is a <span style="color:var(--fg)">geoid</span> — an irregular, lumpy mass distorted by gravitational anomalies, mantle convection, and mountain ranges. The difference between a perfect ellipsoid and the geoid ranges from <span class="mono-data" style="color:var(--cyan)">-106m</span> to <span class="mono-data" style="color:var(--cyan)">+85m</span>.</p>
+          <div class="redacted-bar my-3" data-digit="3">
+            <span class="redacted-cover">The WGS84 geoid model used by GPS systems has an accuracy of plus or minus 2m globally. In contested environments where GPS is denied, legacy astro-geodetic methods revert to local datums with errors exceeding 50m.</span>
+          </div>
+          <p class="text-sm leading-relaxed" style="color:var(--paper-dark)">For a ballistic missile with a CEP of 100m, a 50m datum error consumes <span style="color:var(--red-bright)">half the error budget</span> before the missile even leaves the rail.</p>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <!-- 1.2 Projections -->
+        <section class="fade-in-up mb-8">
+          <h2 class="text-lg mb-4 tracking-wide" style="color:var(--fg)">1.2 — FLATTENING THE IMPOSSIBLE</h2>
+          <p class="text-sm leading-relaxed mb-4" style="color:var(--paper-dark)">You cannot flatten a sphere without distortion. This is not a limitation of technology — it is a <span style="color:var(--fg)">mathematical impossibility</span> proven by Gauss's <em>Theorema Egregium</em> in 1827.</p>
+          <div class="my-6 p-5 rounded paper-overlay" style="background:var(--card);border:1px solid var(--border)">
+            <p class="text-xs tracking-wider mb-4" style="color:var(--amber)">THE PROJECTION TRIANGLE — CHOOSE ONE. COMPROMISE ON THE REST.</p>
+            <div class="grid grid-cols-3 gap-4 text-center">
+              <div class="p-3 rounded" style="border:1px solid var(--border)"><i class="fa-solid fa-expand text-lg mb-2" style="color:var(--cyan)"></i><p class="text-xs" style="color:var(--fg)">EQUAL AREA</p><p class="text-xs mt-1" style="color:var(--muted)">Preserves sizes</p></div>
+              <div class="p-3 rounded" style="border:1px solid var(--border)"><i class="fa-solid fa-shapes text-lg mb-2" style="color:var(--cyan)"></i><p class="text-xs" style="color:var(--fg)">CONFORMAL</p><p class="text-xs mt-1" style="color:var(--muted)">Preserves shapes</p></div>
+              <div class="p-3 rounded" style="border:1px solid var(--border)"><i class="fa-solid fa-ruler text-lg mb-2" style="color:var(--cyan)"></i><p class="text-xs" style="color:var(--fg)">EQUIDISTANT</p><p class="text-xs mt-1" style="color:var(--muted)">Preserves distances</p></div>
+            </div>
+          </div>
+          <p class="text-sm leading-relaxed mb-3" style="color:var(--paper-dark)">Mercator (1569) preserves <span style="color:var(--fg)">angles</span> — making it ideal for maritime navigation. A bearing drawn on a Mercator map is a true bearing on the ocean. But the cost is <span style="color:var(--red-bright)">catastrophic area distortion</span> that increases exponentially toward the poles.</p>
+          <div class="redacted-bar my-3" data-digit="8">
+            <span class="redacted-cover">During the Falklands War (1982), British forces initially used Mercator charts for amphibious planning, resulting in range estimates that were off by 18 percent — corrected only after a Royal Navy surveyor identified the projection mismatch.</span>
+          </div>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <!-- 1.3 The Big Lie -->
+        <section class="fade-in-up mb-8">
+          <h2 class="text-lg mb-4 tracking-wide" style="color:var(--fg)">1.3 — THE BIG LIE</h2>
+          <p class="text-sm leading-relaxed mb-3" style="color:var(--paper-dark)">In 2005, Google Maps adopted <span class="mono-data" style="color:var(--amber)">Web Mercator (EPSG:3857)</span> — a variant that cuts off at plus or minus 85.05 degrees latitude and uses a spherical formula rather than the true ellipsoidal one. It is technically not even a proper map projection. It is a <span style="color:var(--red-bright)">hack</span>.</p>
+          <p class="text-sm leading-relaxed mb-5" style="color:var(--paper-dark)">Web Mercator preserves neither area nor distance. At 60N, areas are inflated by 400%. At 70N — where Greenland sits — by <span class="mono-data" style="color:var(--red-bright)">950%</span>. Greenland appears the same size as Africa on your screen. Africa is <span style="color:var(--fg)">14 times larger</span>.</p>
+
+          <!-- Interactive Greenland Comparison Map -->
+          <div class="my-6 rounded overflow-hidden" style="border:1px solid var(--border);background:rgba(6,10,20,.8)">
+            <div class="flex items-center justify-between px-4 py-2" style="background:rgba(200,134,10,.06);border-bottom:1px solid var(--border)">
+              <span class="mono-data text-xs tracking-wider" style="color:var(--amber)">PROJECTION ANALYSIS TOOL</span>
+              <span class="mono-data text-xs" style="color:var(--muted)" id="map-status">WEB MERCATOR — ACTIVE</span>
+            </div>
+            <div class="relative" style="padding:12px">
+              <svg id="map-svg" width="100%" viewBox="0 0 800 450" style="display:block;max-height:420px">
+                <defs>
+                  <filter id="glow-a"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                <g class="map-grid" id="map-grid"></g>
+                <g id="africa-group">
+                  <path id="africa-path" class="africa-shape" d=""/>
+                  <text x="438" y="232" fill="var(--cyan)" font-family="JetBrains Mono" font-size="10" text-anchor="middle" opacity=".7">AFRICA</text>
+                  <text x="438" y="245" fill="var(--cyan)" font-family="JetBrains Mono" font-size="8" text-anchor="middle" opacity=".5">30.37M km2</text>
+                </g>
+                <g id="greenland-map-group">
+                  <path id="greenland-map-path" class="greenland-mercator" d=""/>
+                  <text x="305" y="82" fill="var(--amber)" font-family="JetBrains Mono" font-size="9" text-anchor="middle" opacity=".8">GREENLAND</text>
+                </g>
+                <g id="greenland-extracted-group" style="display:none">
+                  <path id="greenland-extracted-path" class="greenland-extracted" d=""/>
+                  <text id="greenland-extracted-label" fill="var(--amber)" font-family="JetBrains Mono" font-size="9" text-anchor="middle" opacity=".9"></text>
+                </g>
+                <g id="overlay-info" style="display:none">
+                  <rect x="580" y="20" width="210" height="100" rx="3" fill="rgba(10,15,30,.92)" stroke="var(--border)"/>
+                  <text x="592" y="40" fill="var(--amber)" font-family="JetBrains Mono" font-size="9" font-weight="bold">SIZE COMPARISON</text>
+                  <text x="592" y="58" fill="var(--fg)" font-family="JetBrains Mono" font-size="8">Greenland: 2.17M km2</text>
+                  <text x="592" y="72" fill="var(--fg)" font-family="JetBrains Mono" font-size="8">Africa: 30.37M km2</text>
+                  <text x="592" y="86" fill="var(--muted)" font-family="JetBrains Mono" font-size="8" id="info-scale"></text>
+                  <text x="592" y="102" fill="var(--cyan)" font-family="JetBrains Mono" font-size="9" font-weight="bold" id="info-ratio"></text>
+                </g>
+              </svg>
+              <div class="flex items-center gap-4 px-3 py-3" style="border-top:1px solid var(--border)">
+                <button id="extract-btn" onclick="toggleExtractGreenland()" class="px-4 py-2 text-xs tracking-wider transition-all" style="border:1px solid var(--amber);color:var(--amber);background:rgba(200,134,10,.08);cursor:pointer;font-family:'IBM Plex Mono',monospace"><i class="fa-solid fa-up-right-from-square mr-1"></i> EXTRACT GREENLAND</button>
+                <div id="deproj-controls" class="flex items-center gap-3 flex-1" style="display:none">
+                  <span class="text-xs" style="color:var(--muted)">MERCATOR</span>
+                  <input type="range" min="0" max="100" value="0" class="deproj-slider flex-1" id="deproj-slider" oninput="updateDeprojection(this.value)">
+                  <span class="text-xs" style="color:var(--cyan)">TRUE SIZE</span>
+                  <span class="mono-data text-xs px-2" style="color:var(--amber);min-width:40px;text-align:right" id="deproj-pct">0%</span>
+                </div>
+                <button id="reset-map-btn" onclick="resetMap()" class="px-3 py-2 text-xs tracking-wider transition-all" style="display:none;border:1px solid var(--border);color:var(--muted);background:transparent;cursor:pointer;font-family:'IBM Plex Mono',monospace"><i class="fa-solid fa-rotate-left mr-1"></i> RESET</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm leading-relaxed mb-3" style="color:var(--paper-dark)">The defence implication: a 10km line segment at 70N in Web Mercator represents only <span class="mono-data" style="color:var(--red-bright)">3.4km</span> on the ground. Every range calculation, every buffer zone, every engagement radius derived from a Web Mercator display is <span style="color:var(--fg)">wrong by a factor of three</span>.</p>
+          <div class="redacted-bar my-3" data-digit="5">
+            <span class="redacted-cover">A 2019 NATO exercise in Norway used Web Mercator for artillery range fan plotting, resulting in a safety exclusion zone that was 280 percent larger than required — effectively denying friendly forces access to 14km2 of operational terrain.</span>
+          </div>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <!-- 1.4 Tolerance -->
+        <section class="fade-in-up mb-8">
+          <h2 class="text-lg mb-4 tracking-wide" style="color:var(--fg)">1.4 — TOLERANCE</h2>
+          <p class="text-sm leading-relaxed mb-5" style="color:var(--paper-dark)">The fundamental question of military GIS is not "what is the most accurate projection?" but <span style="color:var(--fg)">"what is the acceptable error for this decision?"</span> The tolerance for error has not changed. It has become more unforgiving.</p>
+          <div class="rounded overflow-hidden mb-5" style="border:1px solid var(--border)">
+            <table class="intel-table">
+              <thead><tr style="background:rgba(200,134,10,.04)"><th>ERA</th><th>SYSTEM</th><th>ACCURACY REQ.</th><th>PROJECTION</th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--muted)">WWII</td><td>Artillery</td><td class="mono-data" style="color:var(--red-bright)">+/-200m</td><td>Local Gauss-Kruger</td></tr>
+                <tr><td style="color:var(--muted)">Cold War</td><td>ICBM</td><td class="mono-data" style="color:var(--red-bright)">+/-50m</td><td>UTM (ellipsoidal)</td></tr>
+                <tr><td style="color:var(--muted)">1990s</td><td>GPS-guided munitions</td><td class="mono-data" style="color:var(--amber)">+/-5m</td><td>UTM / local datum</td></tr>
+                <tr><td style="color:var(--muted)">2020s</td><td>Hypersonic weapons</td><td class="mono-data" style="color:var(--cyan)">+/-1m</td><td>Geocentric Cartesian</td></tr>
+                <tr><td style="color:var(--muted)">Current</td><td>C-UAS swarms</td><td class="mono-data" style="color:var(--cyan)">+/-0.1m</td><td>Local ENU frames</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="p-4 rounded mb-4" style="background:rgba(139,32,32,.08);border:1px solid rgba(139,32,32,.3)">
+            <p class="text-sm leading-relaxed" style="color:var(--fg)"><i class="fa-solid fa-triangle-exclamation mr-2" style="color:var(--red-bright)"></i><strong>THE PARADOX:</strong> We achieve sub-metre targeting accuracy, then display the results on Web Mercator — a projection that introduces errors measured in <span style="color:var(--red-bright)">hundreds of metres</span> at operational latitudes. The projection error alone can exceed the weapon's entire CEP.</p>
+          </div>
+          <div class="redacted-bar my-3" data-digit="7">
+            <span class="redacted-cover">Singapore's Defence Science and Technology Agency (DSTA) mandates SVY21 (a modified Cassini-Soldner projection) for all local operations, explicitly prohibiting Web Mercator for any planning within a 200nm radius — a policy born from a 2006 incident where Mercator distortion led to a 340m overlap in live-fire exclusion zones.</span>
+          </div>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <!-- Classified Appendix — Unlock Code -->
+        <section class="fade-in-up mb-12">
+          <div class="flex items-center gap-3 mb-4">
+            <h2 class="text-lg tracking-wide" style="color:var(--fg)">CLASSIFIED APPENDIX</h2>
+            <span class="stamp stamp-classified" id="appendix-stamp">CLASSIFIED</span>
+          </div>
+          <div class="p-6 rounded paper-overlay relative" style="background:var(--card);border:1px solid var(--border)">
+            <p class="text-xs tracking-wider mb-4" style="color:var(--muted)">ANOMALY ALPHA — CLEARANCE VERIFICATION REQUIRED</p>
+            <p class="text-sm leading-relaxed mb-4" style="color:var(--paper-dark)">Four digits have been embedded in the redacted passages above. Hover over each blacked-out section to declassify. The projection identifier referenced in Section 1.3 is your clearance code.</p>
+            <p class="text-sm mb-5" style="color:var(--paper-dark)">Digits discovered: <span id="digits-found" class="mono-data" style="color:var(--cyan)">0</span> / 4</p>
+            <div class="flex items-center gap-3">
+              <div class="flex gap-2">
+                <input type="text" maxlength="1" class="code-digit" id="code-d-0" oninput="onCodeInput(0)" aria-label="Code digit 1">
+                <input type="text" maxlength="1" class="code-digit" id="code-d-1" oninput="onCodeInput(1)" aria-label="Code digit 2">
+                <input type="text" maxlength="1" class="code-digit" id="code-d-2" oninput="onCodeInput(2)" aria-label="Code digit 3">
+                <input type="text" maxlength="1" class="code-digit" id="code-d-3" oninput="onCodeInput(3)" aria-label="Code digit 4">
+              </div>
+              <button onclick="submitCode()" class="px-4 py-3 text-xs tracking-wider transition-all" style="border:1px solid var(--cyan);color:var(--cyan);background:rgba(0,180,180,.06);cursor:pointer;font-family:'IBM Plex Mono',monospace">VERIFY</button>
+              <span id="code-status" class="mono-data text-xs" style="color:var(--muted)"></span>
+            </div>
+          </div>
+        </section>
+
+        <div style="height:60px"></div>
+      </div>
+
+      <!-- Locked chapter placeholders -->
+      <div id="chapter-2" class="relative z-10 content-body" style="display:none;padding:3rem;text-align:center">
+        <i class="fa-solid fa-lock text-4xl mb-4" style="color:var(--red);opacity:.5"></i>
+        <h2 class="text-xl mb-2" style="color:var(--muted)">ANOMALY BRAVO</h2>
+        <p class="text-sm" style="color:var(--muted)">COORDINATE SYSTEMS — The Language of Locations</p>
+        <p class="text-xs mt-4" style="color:var(--red)">CLEARANCE REQUIRED — COMPLETE ANOMALY ALPHA</p>
+      </div>
+      <div id="chapter-3" class="relative z-10 content-body" style="display:none;padding:3rem;text-align:center">
+        <i class="fa-solid fa-lock text-4xl mb-4" style="color:var(--red);opacity:.5"></i>
+        <h2 class="text-xl mb-2" style="color:var(--muted)">ANOMALY CHARLIE</h2>
+        <p class="text-sm" style="color:var(--muted)">GIS MEASUREMENTS — Geodesic vs Geometric</p>
+        <p class="text-xs mt-4" style="color:var(--red)">CLEARANCE REQUIRED — COMPLETE ANOMALY BRAVO</p>
+      </div>
+      <div id="chapter-4" class="relative z-10 content-body" style="display:none;padding:3rem;text-align:center">
+        <i class="fa-solid fa-lock text-4xl mb-4" style="color:var(--red);opacity:.5"></i>
+        <h2 class="text-xl mb-2" style="color:var(--muted)">ANOMALY DELTA</h2>
+        <p class="text-sm" style="color:var(--muted)">THE WAY AHEAD — Past, Present, Future</p>
+        <p class="text-xs mt-4" style="color:var(--red)">CLEARANCE REQUIRED — COMPLETE ANOMALY CHARLIE</p>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+/* ============================================================
+   AUDIO ENGINE — Web Audio API synthesized sounds
+   ============================================================ */
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
+}
+function playTypewriterClick() {
+  if (!audioCtx) return;
+  try {
+    var dur = 0.025, buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.004));
+    var src = audioCtx.createBufferSource(); src.buffer = buf;
+    var flt = audioCtx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = 3500; flt.Q.value = 1.5;
+    src.connect(flt); flt.connect(audioCtx.destination); src.start();
+  } catch(e) {}
+}
+function playPaperRustle() {
+  if (!audioCtx) return;
+  try {
+    var dur = 0.4, buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) { var t = i / audioCtx.sampleRate; d[i] = (Math.random() * 2 - 1) * 0.15 * Math.sin(t * Math.PI / dur) * (1 + 0.4 * Math.sin(t * 300)); }
+    var src = audioCtx.createBufferSource(); src.buffer = buf;
+    var flt = audioCtx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = 900; flt.Q.value = 0.6;
+    src.connect(flt); flt.connect(audioCtx.destination); src.start();
+  } catch(e) {}
+}
+function playStampSound() {
+  if (!audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.frequency.value = 75; osc.type = 'sine';
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+    osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+    var dur = 0.08, buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3 * Math.exp(-i / (audioCtx.sampleRate * 0.008));
+    var src = audioCtx.createBufferSource(); src.buffer = buf;
+    var flt = audioCtx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 400;
+    src.connect(flt); flt.connect(audioCtx.destination); src.start();
+  } catch(e) {}
+}
+function playSuccessSound() {
+  if (!audioCtx) return;
+  try {
+    [440, 554, 659].forEach(function(freq, i) {
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.frequency.value = freq; osc.type = 'sine';
+      var t0 = audioCtx.currentTime + i * 0.12;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.15, t0 + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(t0); osc.stop(t0 + 0.4);
+    });
+  } catch(e) {}
+}
+function playErrorSound() {
+  if (!audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.frequency.value = 150; osc.type = 'sawtooth';
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+    osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+function delay(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+function showToast(msg, color) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.borderColor = color || 'var(--border)'; t.style.color = color || 'var(--fg)';
+  t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+function pointsToPathD(pts) {
+  return 'M ' + pts.map(function(p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' L ') + ' Z';
+}
+
+/* ============================================================
+   TYPEWRITER ENGINE
+   ============================================================ */
+var typewriterAbort = false;
+
+async function runOpeningSequence() {
+  initAudio();
+  var container = document.getElementById('typewriter-container');
+  var lines = [
+    { text: 'ALBATROSS INTELLIGENCE DIVISION', color: 'var(--amber)', cls: 'text-base tracking-widest' },
+    { text: 'SPATIAL ANALYSIS UNIT — SINGAPORE STATION', color: 'var(--muted)', cls: 'text-xs tracking-wider' },
+    { text: '__BLANK__' },
+    { text: 'You have been assigned to COORDINATE ZERO.', color: 'var(--fg)', cls: 'text-sm' },
+    { text: 'Four anomalies. Four locations. One mission.', color: 'var(--fg)', cls: 'text-sm' },
+    { text: '__BLANK__' },
+    { text: 'Your clearance has been verified.', color: 'var(--cyan)', cls: 'text-sm' },
+    { text: 'Opening dossier...', color: 'var(--amber)', cls: 'text-sm' }
+  ];
+  for (var li = 0; li < lines.length; li++) {
+    if (typewriterAbort) break;
+    var line = lines[li];
+    if (line.text === '__BLANK__') { await delay(600); continue; }
+    var p = document.createElement('p');
+    p.className = 'typewriter-text tracking-wide ' + line.cls;
+    p.style.color = line.color;
+    p.style.minHeight = '1.5em';
+    container.appendChild(p);
+    var cursor = document.getElementById('cursor-holder');
+    cursor.style.display = 'inline-block';
+    container.appendChild(cursor);
+    for (var ci = 0; ci < line.text.length; ci++) {
+      if (typewriterAbort) { p.textContent = line.text; break; }
+      p.textContent = line.text.substring(0, ci + 1);
+      if (ci % 2 === 0) playTypewriterClick();
+      await delay(line.text.indexOf('ALBATROSS') >= 0 ? 55 : 38);
+    }
+    cursor.style.display = 'none';
+    container.appendChild(cursor);
+    await delay(line.text.indexOf('dossier') >= 0 ? 800 : 400);
+  }
+  if (!typewriterAbort) { await delay(400); transitionToMain(); }
+}
+
+function skipOpening() { typewriterAbort = true; transitionToMain(); }
+
+function transitionToMain() {
+  playPaperRustle();
+  var opening = document.getElementById('opening-screen');
+  var main = document.getElementById('main-interface');
+  opening.style.transition = 'opacity 0.6s ease';
+  opening.style.opacity = '0';
+  setTimeout(function() {
+    opening.style.display = 'none';
+    main.style.display = 'flex';
+    requestAnimationFrame(function() {
+      main.style.transition = 'opacity 0.8s ease';
+      main.style.opacity = '1';
+      initializeChapter1();
+    });
+  }, 600);
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var os = document.getElementById('opening-screen');
+    if (os && os.style.display !== 'none') skipOpening();
+  }
+});
+
+/* ============================================================
+   EARTH SHAPE MORPHING
+   ============================================================ */
+var GEOID_PTS = 120, CX = 160, CY = 95, R = 70;
+
+function generateShapePoints(type) {
+  var pts = [];
+  for (var i = 0; i < GEOID_PTS; i++) {
+    var a = (i / GEOID_PTS) * Math.PI * 2, r = R;
+    if (type === 'ellipsoid') { r *= (1 - 0.15 * Math.pow(Math.cos(a), 2)); }
+    else if (type === 'geoid') {
+      r *= (1 - 0.15 * Math.pow(Math.cos(a), 2));
+      r += 5 * Math.sin(3*a+0.5) + 3.5*Math.sin(5*a+1.2) + 4*Math.sin(7*a+2.1) + 2.5*Math.sin(2*a+0.8) + 2*Math.sin(11*a+3.5) + 1.5*Math.sin(13*a+4.2);
+    }
+    pts.push([CX + r * Math.cos(a), CY + r * Math.sin(a)]);
+  }
+  return pts;
+}
+
+var shapeCache = {
+  sphere: generateShapePoints('sphere'),
+  ellipsoid: generateShapePoints('ellipsoid'),
+  geoid: generateShapePoints('geoid')
+};
+var currentShape = 'sphere', morphAnim = null;
+
+function lerpPoints(a, b, t) {
+  return a.map(function(p, i) { return [p[0]+(b[i][0]-p[0])*t, p[1]+(b[i][1]-p[1])*t]; });
+}
+
+function morphTo(target) {
+  if (target === currentShape) return;
+  var from = shapeCache[currentShape], to = shapeCache[target];
+  if (morphAnim) cancelAnimationFrame(morphAnim);
+  document.querySelectorAll('.shape-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.shape === target); });
+  var start = performance.now();
+  (function animate(now) {
+    var t = Math.min((now - start) / 600, 1);
+    t = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+    var pts = lerpPoints(from, to, t), d = pointsToPathD(pts);
+    document.getElementById('geoid-path').setAttribute('d', d);
+    document.getElementById('geoid-path-fill').setAttribute('d', d);
+    if (t < 1) { morphAnim = requestAnimationFrame(animate); }
+    else { currentShape = target; updateShapeLabel(target); }
+  })(performance.now());
+}
+
+var shapeLabels = {
+  sphere: 'Perfect sphere — assumed by early navigators. Error: up to 21km at the poles.',
+  ellipsoid: 'Oblate ellipsoid (WGS84) — equatorial bulge of 21.4km. Military standard since 1984.',
+  geoid: 'Geoid — true gravitational surface. Irregular, lumpy, impossible to express as a simple equation. The reality beneath every coordinate.'
+};
+function updateShapeLabel(type) {
+  var el = document.getElementById('shape-label');
+  el.style.transition = 'opacity 0.2s'; el.style.opacity = '0';
+  setTimeout(function() { el.textContent = shapeLabels[type]; el.style.opacity = '1'; }, 200);
+}
+
+/* ============================================================
+   GREENLAND COMPARISON MAP
+   ============================================================ */
+// Simplified outline points (normalised 0-1)
+var greenlandNorm = [[0.45,0],[0.50,0.01],[0.56,0.03],[0.62,0.07],[0.67,0.13],[0.72,0.20],[0.76,0.28],[0.78,0.36],[0.78,0.44],[0.76,0.51],[0.72,0.58],[0.68,0.64],[0.64,0.70],[0.60,0.76],[0.57,0.82],[0.54,0.88],[0.52,0.94],[0.50,1.00],[0.47,0.97],[0.44,0.93],[0.40,0.87],[0.36,0.80],[0.32,0.73],[0.28,0.65],[0.25,0.57],[0.23,0.49],[0.22,0.41],[0.22,0.33],[0.24,0.25],[0.27,0.18],[0.31,0.12],[0.36,0.06],[0.41,0.02]];
+var africaNorm = [[0.42,0],[0.48,0.01],[0.55,0.02],[0.62,0.04],[0.68,0.07],[0.74,0.11],[0.79,0.17],[0.83,0.24],[0.86,0.32],[0.88,0.40],[0.89,0.48],[0.88,0.55],[0.85,0.61],[0.81,0.67],[0.76,0.72],[0.70,0.77],[0.65,0.82],[0.60,0.86],[0.56,0.90],[0.53,0.94],[0.51,0.98],[0.49,1.00],[0.47,0.97],[0.44,0.93],[0.40,0.87],[0.36,0.80],[0.32,0.73],[0.28,0.66],[0.24,0.58],[0.21,0.50],[0.18,0.42],[0.16,0.34],[0.16,0.26],[0.18,0.19],[0.22,0.13],[0.27,0.08],[0.33,0.04],[0.38,0.01]];
+
+var AFRICA_POS = { x: 370, y: 178, w: 150, h: 95 };
+var GL_MERC_POS = { x: 238, y: 18, w: 132, h: 112 };
+
+function normToSvg(norm, pos) {
+  return norm.map(function(p) { return [pos.x + p[0]*pos.w, pos.y + p[1]*pos.h]; });
+}
+function normToPathD(norm, pos) { return pointsToPathD(normToSvg(norm, pos)); }
+
+function drawMapGrid() {
+  var g = document.getElementById('map-grid'), svgW = 800, svgH = 450;
+  for (var lon = -180; lon <= 180; lon += 30) {
+    var x = ((lon+180)/360)*svgW, isMajor = lon%90===0;
+    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',x); line.setAttribute('y1',0); line.setAttribute('x2',x); line.setAttribute('y2',svgH);
+    if (isMajor) line.classList.add('major');
+    g.appendChild(line);
+  }
+  function mercY(lat) {
+    var c = Math.max(-85, Math.min(85, lat)) * Math.PI / 180;
+    return (1 - Math.log(Math.tan(c) + 1/Math.cos(c)) / Math.PI) / 2 * svgH;
+  }
+  for (var lat = -75; lat <= 80; lat += 15) {
+    var y = mercY(lat);
+    if (y < -10 || y > svgH+10) continue;
+    var isMajor = lat%30===0;
+    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',0); line.setAttribute('y1',y); line.setAttribute('x2',svgW); line.setAttribute('y2',y);
+    if (isMajor) line.classList.add('major');
+    g.appendChild(line);
+    if (isMajor && lat !== 0) {
+      var txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x',6); txt.setAttribute('y',y-4);
+      txt.setAttribute('fill','rgba(0,180,180,0.25)'); txt.setAttribute('font-family','JetBrains Mono'); txt.setAttribute('font-size','7');
+      txt.textContent = Math.abs(lat) + '\u00B0' + (lat>0?'N':'S');
+      g.appendChild(txt);
+    }
+  }
+  var eqY = mercY(0);
+  var eqLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+  eqLine.setAttribute('x1',0); eqLine.setAttribute('y1',eqY); eqLine.setAttribute('x2',svgW); eqLine.setAttribute('y2',eqY);
+  eqLine.classList.add('major'); eqLine.style.stroke = 'rgba(0,180,180,0.35)';
+  g.appendChild(eqLine);
+}
+
+/* ============================================================
+   GREENLAND EXTRACT / DRAG / DEPROJECT
+   ============================================================ */
+var greenlandState = 'in-map';
+var deprojLevel = 0;
+var extractedPos = { x: 80, y: 30 };
+var dragOffset = { x: 0, y: 0 };
+var isDragging = false;
+
+function toggleExtractGreenland() {
+  if (greenlandState === 'in-map') extractGreenland(); else resetMap();
+}
+
+function extractGreenland() {
+  greenlandState = 'extracted';
+  deprojLevel = 0;
+  document.getElementById('deproj-slider').value = 0;
+  document.getElementById('deproj-pct').textContent = '0%';
+  document.getElementById('greenland-map-group').style.display = 'none';
+  document.getElementById('greenland-extracted-group').style.display = 'block';
+  extractedPos = { x: 80, y: 30 };
+  updateExtractedGreenland();
+  document.getElementById('deproj-controls').style.display = 'flex';
+  document.getElementById('reset-map-btn').style.display = 'inline-block';
+  document.getElementById('extract-btn').innerHTML = '<i class="fa-solid fa-arrow-down-to-line mr-1"></i> RETURN TO MAP';
+  document.getElementById('map-status').textContent = 'GREENLAND EXTRACTED — DRAG TO COMPARE';
+  document.getElementById('overlay-info').style.display = 'block';
+  updateInfoPanel();
+  playPaperRustle();
+}
+
+function resetMap() {
+  greenlandState = 'in-map';
+  deprojLevel = 0;
+  document.getElementById('deproj-slider').value = 0;
+  document.getElementById('deproj-pct').textContent = '0%';
+  document.getElementById('greenland-map-group').style.display = 'block';
+  document.getElementById('greenland-extracted-group').style.display = 'none';
+  document.getElementById('deproj-controls').style.display = 'none';
+  document.getElementById('reset-map-btn').style.display = 'none';
+  document.getElementById('extract-btn').innerHTML = '<i class="fa-solid fa-up-right-from-square mr-1"></i> EXTRACT GREENLAND';
+  document.getElementById('map-status').textContent = 'WEB MERCATOR — ACTIVE';
+  document.getElementById('overlay-info').style.display = 'none';
+}
+
+function updateDeprojection(val) {
+  deprojLevel = parseInt(val);
+  document.getElementById('deproj-pct').textContent = deprojLevel + '%';
+  updateExtractedGreenland();
+  updateInfoPanel();
+}
+
+function updateExtractedGreenland() {
+  var scale = 1 - 0.691 * (deprojLevel / 100);
+  var w = GL_MERC_POS.w * scale;
+  var h = GL_MERC_POS.h * scale;
+  var basePts = normToSvg(greenlandNorm, { x: 0, y: 0, w: w, h: h });
+  var pts = basePts.map(function(p) { return [p[0]+extractedPos.x, p[1]+extractedPos.y]; });
+  var d = pointsToPathD(pts);
+  document.getElementById('greenland-extracted-path').setAttribute('d', d);
+  // Label at center
+  var cx = 0, cy = 0;
+  pts.forEach(function(p) { cx += p[0]; cy += p[1]; });
+  cx /= pts.length; cy /= pts.length;
+  var label = document.getElementById('greenland-extracted-label');
+  label.setAttribute('x', cx); label.setAttribute('y', cy + 4);
+  label.textContent = deprojLevel > 50 ? 'GREENLAND (TRUE)' : 'GREENLAND';
+}
+
+function updateInfoPanel() {
+  var scale = 1 - 0.691 * (deprojLevel / 100);
+  var apparentArea = GL_MERC_POS.w * GL_MERC_POS.h * scale * scale;
+  var africaArea = AFRICA_POS.w * AFRICA_POS.h;
+  var ratio = (africaArea / Math.max(apparentArea, 1)).toFixed(1);
+  document.getElementById('info-scale').textContent = 'Scale factor: ' + scale.toFixed(3) + 'x';
+  document.getElementById('info-ratio').textContent = 'Africa is ' + ratio + 'x larger (visual)';
+}
+
+// Drag logic
+(function() {
+  var svg = null;
+  function getSvgPoint(e) {
+    var pt = svg.createSVGPoint();
+    var touch = e.touches ? e.touches[0] : e;
+    pt.x = touch.clientX; pt.y = touch.clientY;
+    var ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    return pt.matrixTransform(ctm.inverse());
+  }
+  function onStart(e) {
+    if (greenlandState !== 'extracted') return;
+    svg = document.getElementById('map-svg');
+    var gp = getSvgPoint(e);
+    // Check if inside extracted Greenland bounding box
+    var scale = 1 - 0.691 * (deprojLevel / 100);
+    var w = GL_MERC_POS.w * scale, h = GL_MERC_POS.h * scale;
+    if (gp.x >= extractedPos.x && gp.x <= extractedPos.x+w && gp.y >= extractedPos.y && gp.y <= extractedPos.y+h) {
+      isDragging = true;
+      dragOffset.x = gp.x - extractedPos.x;
+      dragOffset.y = gp.y - extractedPos.y;
+      document.getElementById('greenland-extracted-path').classList.add('dragging');
+      e.preventDefault();
+    }
+  }
+  function onMove(e) {
+    if (!isDragging) return;
+    var gp = getSvgPoint(e);
+    extractedPos.x = gp.x - dragOffset.x;
+    extractedPos.y = gp.y - dragOffset.y;
+    updateExtractedGreenland();
+    e.preventDefault();
+  }
+  function onEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+    document.getElementById('greenland-extracted-path').classList.remove('dragging');
+  }
+  document.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+})();
+
+/* ============================================================
+   REDACTED BARS & DIGIT DISCOVERY
+   ============================================================ */
+var discoveredDigits = {};
+var UNLOCK_CODE = '3857';
+
+function initRedactedBars() {
+  document.querySelectorAll('.redacted-bar').forEach(function(bar) {
+    bar.addEventListener('mouseenter', function() {
+      var digit = bar.dataset.digit;
+      if (!discoveredDigits[digit]) {
+        discoveredDigits[digit] = digit;
+        var count = Object.keys(discoveredDigits).length;
+        document.getElementById('digits-found').textContent = count;
+        document.getElementById('digits-found').classList.add('digit-flash');
+        setTimeout(function() { document.getElementById('digits-found').classList.remove('digit-flash'); }, 600);
+        if (count === 4) {
+          showToast('All digits declassified. Enter the code below.', 'var(--cyan)');
+        }
+      }
+    });
+  });
+}
+
+/* ============================================================
+   CODE ENTRY
+   ============================================================ */
+function onCodeInput(idx) {
+  var el = document.getElementById('code-d-' + idx);
+  el.value = el.value.replace(/[^0-9]/g, '');
+  if (el.value.length === 1 && idx < 3) {
+    document.getElementById('code-d-' + (idx+1)).focus();
+  }
+}
+
+function submitCode() {
+  var code = '';
+  for (var i = 0; i < 4; i++) code += document.getElementById('code-d-' + i).value;
+  if (code.length < 4) { showToast('Enter all four digits.', 'var(--amber)'); return; }
+  if (code === UNLOCK_CODE) {
+    playSuccessSound();
+    document.getElementById('code-status').textContent = 'ACCESS GRANTED';
+    document.getElementById('code-status').style.color = '#4A7A4A';
+    for (var i = 0; i < 4; i++) document.getElementById('code-d-' + i).classList.add('correct');
+    // Update stamp
+    var stamp = document.getElementById('appendix-stamp');
+    stamp.classList.remove('stamp-classified', 'visible');
+    stamp.classList.add('stamp-declassified');
+    stamp.textContent = 'DECLASSIFIED';
+    playStampSound();
+    setTimeout(function() { stamp.classList.add('visible'); }, 50);
+    // Unlock Bravo
+    setTimeout(function() {
+      var tab = document.querySelector('[data-chapter="2"]');
+      tab.classList.remove('locked');
+      tab.classList.add('completed');
+      tab.querySelector('i').className = 'fa-solid fa-check text-xs mb-1';
+      tab.querySelector('i').style.color = '#4A7A4A';
+      document.getElementById('dossier-count').textContent = '1/4';
+      showToast('ANOMALY BRAVO unlocked. Proceed when ready.', '#4A7A4A');
+    }, 800);
+  } else {
+    playErrorSound();
+    document.getElementById('code-status').textContent = 'ACCESS DENIED';
+    document.getElementById('code-status').style.color = 'var(--red-bright)';
+    for (var i = 0; i < 4; i++) {
+      document.getElementById('code-d-' + i).classList.add('wrong');
+    }
+    setTimeout(function() {
+      for (var i = 0; i < 4; i++) {
+        document.getElementById('code-d-' + i).classList.remove('wrong');
+        document.getElementById('code-d-' + i).value = '';
+      }
+      document.getElementById('code-d-0').focus();
+      document.getElementById('code-status').textContent = '';
+    }, 1000);
+  }
+}
+
+/* ============================================================
+   CHAPTER NAVIGATION
+   ============================================================ */
+function navigateChapter(num) {
+  var tab = document.querySelector('[data-chapter="' + num + '"]');
+  if (tab.classList.contains('locked')) {
+    showToast('Clearance denied. Complete previous anomaly first.', 'var(--red-bright)');
+    return;
+  }
+  for (var i = 1; i <= 4; i++) {
+    document.getElementById('chapter-' + i).style.display = (i === num) ? 'block' : 'none';
+    var t = document.querySelector('[data-chapter="' + i + '"]');
+    t.classList.toggle('active', i === num);
+    t.setAttribute('aria-selected', i === num ? 'true' : 'false');
+  }
+  document.getElementById('content-area').scrollTop = 0;
+}
+
+/* ============================================================
+   SCROLL REVEAL (IntersectionObserver)
+   ============================================================ */
+function initScrollReveal() {
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.15 });
+  document.querySelectorAll('.fade-in-up').forEach(function(el) { observer.observe(el); });
+}
+
+/* ============================================================
+   CHAPTER 1 INITIALIZATION
+   ============================================================ */
+function initializeChapter1() {
+  // Initialize geoid SVG
+  var d = pointsToPathD(shapeCache.sphere);
+  document.getElementById('geoid-path').setAttribute('d', d);
+  document.getElementById('geoid-path-fill').setAttribute('d', d);
+
+  // Draw map grid and shapes
+  drawMapGrid();
+  document.getElementById('africa-path').setAttribute('d', normToPathD(africaNorm, AFRICA_POS));
+  document.getElementById('greenland-map-path').setAttribute('d', normToPathD(greenlandNorm, GL_MERC_POS));
+
+  // Init redacted bars
+  initRedactedBars();
+
+  // Init scroll reveal
+  initScrollReveal();
+
+  // Trigger initial fade-ins for visible sections
+  setTimeout(function() {
+    document.querySelectorAll('.fade-in-up').forEach(function(el) {
+      var rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight) el.classList.add('visible');
+    });
+  }, 100);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', function() {
+  // First click anywhere initializes audio context
+  document.addEventListener('click', initAudio, { once: true });
+  document.addEventListener('touchstart', initAudio, { once: true });
+  // Start opening
+  runOpeningSequence();
+});
+</script>
+</body>
+</html>
